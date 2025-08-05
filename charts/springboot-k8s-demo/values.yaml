@@ -1,0 +1,12 @@
+replicaCount: 1
+
+image:
+  repository: adrwlo/springboot-k8s-demo
+  pullPolicy: Always
+  tag: "latest"
+
+service:
+  type: ClusterIP
+  port: 80
+
+containerPort: 8080
