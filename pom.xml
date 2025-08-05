@@ -7,9 +7,18 @@
   <version>0.0.1-SNAPSHOT</version>
   <name>springboot-k8s-demo</name>
   <description>Spring Boot K8s Demo</description>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.2.4</version>
+    <relativePath/> <!-- lookup parent from repository -->
+  </parent>
+
   <properties>
     <java.version>17</java.version>
   </properties>
+
   <dependencies>
     <dependency>
       <groupId>org.springframework.boot</groupId>
@@ -21,6 +30,7 @@
       <scope>test</scope>
     </dependency>
   </dependencies>
+
   <build>
     <plugins>
       <plugin>
