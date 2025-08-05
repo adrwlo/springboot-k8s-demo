@@ -24,3 +24,7 @@ jobs:
       run: docker build -t ${{ secrets.DOCKER_USERNAME }}/springboot-k8s-demo:latest .
     - name: Push Docker image
       run: docker push ${{ secrets.DOCKER_USERNAME }}/springboot-k8s-demo:latest
+    - name: Trigger Render redeploy
+      run: curl -X POST "$RENDER_DEPLOY_HOOK_URL"
+      env:
+        RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
