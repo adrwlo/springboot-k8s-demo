@@ -1,0 +1,15 @@
+name: Scheduled Render Redeploy
+
+on:
+  schedule:
+    # Codziennie o 5:00 rano czasu polskiego (czyli 3:00 UTC)
+    - cron: '0 3 * * *'
+
+jobs:
+  scheduled-redeploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Redeploy on Render
+        run: curl -X POST "$RENDER_DEPLOY_DEPLOY_HOOK"
+        env:
+          RENDER_DEPLOY_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
