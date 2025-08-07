@@ -2,8 +2,8 @@ name: Scheduled Render Redeploy
 
 on:
   schedule:
-    # Codziennie o 5:00 rano czasu polskiego (czyli 3:00 UTC)
-    - cron: '0 3 * * *'
+    # Codziennie o 21:20 czasu polskiego (czyli 19:20 UTC)
+    - cron: '20 19 * * *'
 
 jobs:
   scheduled-redeploy:
