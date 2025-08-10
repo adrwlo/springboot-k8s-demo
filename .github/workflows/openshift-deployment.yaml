@@ -1,0 +1,48 @@
+name: OpenShift Deployment
+
+on:
+  push:
+    branches:
+      - openshift-deployment
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up JDK
+      uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Build with Maven
+      run: mvn clean package -DskipTests
+
+    - name: Log in to DockerHub
+      run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+    - name: Build Docker image
+      run: docker build -t ${{ secrets.DOCKER_USERNAME }}/springboot-k8s-demo:latest .
+
+    - name: Push Docker image
+      run: docker push ${{ secrets.DOCKER_USERNAME }}/springboot-k8s-demo:latest
+
+    - name: Install OpenShift CLI
+      run: |
+        curl -LO https://mirror.openshift.com/pub/openshift-v4/clients/oc/latest/linux/oc.tar.gz
+        tar -xzf oc.tar.gz
+        sudo mv oc /usr/local/bin/
+
+    - name: Login to OpenShift
+      run: oc login ${{ secrets.OPENSHIFT_SERVER }} --token=${{ secrets.OPENSHIFT_TOKEN }} --insecure-skip-tls-verify=true
+
+    - name: Deploy to OpenShift
+      run: |
+        oc project ${{ secrets.OPENSHIFT_PROJECT }}
+        # Jeśli masz już DeploymentConfig:
+        oc set image dc/springboot-k8s-demo springboot-k8s-demo=${{ secrets.DOCKER_USERNAME }}/springboot-k8s-demo:latest
+        oc rollout restart dc/springboot-k8s-demo
