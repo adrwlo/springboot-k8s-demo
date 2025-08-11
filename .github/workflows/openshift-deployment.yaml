@@ -60,5 +60,6 @@ jobs:
         else
           echo "🚀 Tworzenie aplikacji w OpenShift..."
           oc new-app docker.io/${{ secrets.DOCKER_USERNAME }}/springboot-k8s-demo:latest --name=springboot-k8s-demo
+          oc expose deployment springboot-k8s-demo --port=8080
           oc expose svc/springboot-k8s-demo
         fi
