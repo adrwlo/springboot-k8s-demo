@@ -36,116 +36,39 @@ jobs:
         curl -LO https://mirror.openshift.com/pub/openshift-v4/clients/oc/latest/linux/oc.tar.gz
         tar -xzf oc.tar.gz
         sudo mv oc /usr/local/bin/
-        oc version
 
     - name: Login to OpenShift
-      env:
-        OPENSHIFT_SERVER: ${{ secrets.OPENSHIFT_SERVER }}
-        OPENSHIFT_TOKEN: ${{ secrets.OPENSHIFT_TOKEN }}
+      run: oc login ${{ secrets.OPENSHIFT_SERVER }} --token=${{ secrets.OPENSHIFT_TOKEN }} --insecure-skip-tls-verify=true
+
+    - name: Set OpenShift project
+      run: oc project ${{ secrets.OPENSHIFT_PROJECT }}
+
+    - name: Deploy application (update or create)
       run: |
-        oc login "$OPENSHIFT_SERVER" --token="$OPENSHIFT_TOKEN" --insecure-skip-tls-verify=true
-
-    - name: Deploy or Update App (create svc/route if missing)
-      env:
-        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-        OPENSHIFT_PROJECT: ${{ secrets.OPENSHIFT_PROJECT }}
-      run: |
-        set -euo pipefail
-
-        APP_NAME="springboot-k8s-demo"
-        IMG="docker.io/${DOCKER_USERNAME}/${APP_NAME}:latest"
-
-        oc project "${OPENSHIFT_PROJECT}"
-
-        # Helper: check if deployment or dc exists
-        has_deployment() { oc get deployment "${APP_NAME}" >/dev/null 2>&1; }
-        has_dc() { oc get dc "${APP_NAME}" >/dev/null 2>&1; }
-        has_svc() { oc get svc "${APP_NAME}" >/dev/null 2>&1; }
-        has_route() { oc get route "${APP_NAME}" >/dev/null 2>&1; }
-
-        if has_deployment || has_dc; then
-          echo "✅ Application exists — updating image and restarting rollout..."
-
-          # Try to set image on deployment, fallback to dc
-          if has_deployment; then
-            echo " - Updating Deployment image..."
-            oc set image deployment/"${APP_NAME}" "${APP_NAME}"="${IMG}"
-            echo " - Restarting Deployment rollout..."
-            oc rollout restart deployment/"${APP_NAME}"
-          else
-            echo " - Updating DeploymentConfig image..."
-            oc set image dc/"${APP_NAME}" "${APP_NAME}"="${IMG}"
-            echo " - Restarting DC rollout..."
-            oc rollout restart dc/"${APP_NAME}"
-          fi
-
-          # Ensure Service exists (create from deployment or dc if missing)
-          if ! has_svc; then
-            echo "ℹ️ Service not found — creating Service from existing workload..."
-            if has_deployment; then
-              oc expose deployment "${APP_NAME}" --port=8080 || true
-            else
-              # expose dc -> creates svc in older OpenShift; if fails, create svc via oc create service
-              oc expose dc "${APP_NAME}" --port=8080 || true
-            fi
-          fi
-
-          # Ensure Route exists
-          if ! has_route; then
-            echo "ℹ️ Route not found — exposing service to create Route..."
-            oc expose svc "${APP_NAME}" || true
-          fi
-
+        # Sprawdź, czy deployment istnieje
+        if oc get deployment springboot-k8s-demo; then
+          echo "Deployment istnieje, aktualizuję obraz"
+          oc set image deployment/springboot-k8s-demo springboot-k8s-demo=${{ secrets.DOCKER_USERNAME }}/springboot-k8s-demo:latest
+          oc rollout restart deployment/springboot-k8s-demo
         else
-          echo "🚀 Application does not exist — creating from image..."
-          oc new-app "${IMG}" --name="${APP_NAME}"
-          # create service from deployment (oc new-app may create deployment or dc)
-          # try both - expose deployment first, fallback to dc, then expose svc -> route
-          oc expose deployment "${APP_NAME}" --port=8080 || true
-          oc expose dc "${APP_NAME}" --port=8080 || true
-          # create route from svc
-          oc expose svc "${APP_NAME}" || true
+          echo "Deployment nie istnieje, tworzę nowy"
+          oc new-app ${{ secrets.DOCKER_USERNAME }}/springboot-k8s-demo:latest --name=springboot-k8s-demo
         fi
 
-    - name: Wait for Route and print URL
-      env:
-        OPENSHIFT_PROJECT: ${{ secrets.OPENSHIFT_PROJECT }}
+    - name: Expose Service as Route
       run: |
-        set -euo pipefail
-        APP_NAME="springboot-k8s-demo"
-        oc project "${OPENSHIFT_PROJECT}"
-
-        # ensure svc exists (final safety)
-        if ! oc get svc "${APP_NAME}" >/dev/null 2>&1; then
-          echo "⚠️ Service still missing — attempting to create from deployment/dc..."
-          if oc get deployment "${APP_NAME}" >/dev/null 2>&1; then
-            oc expose deployment "${APP_NAME}" --port=8080 || true
-          elif oc get dc "${APP_NAME}" >/dev/null 2>&1; then
-            oc expose dc "${APP_NAME}" --port=8080 || true
-          fi
+        if oc get route springboot-k8s-demo; then
+          echo "Route istnieje"
+        else
+          echo "Tworzę Route"
+          oc expose svc/springboot-k8s-demo
         fi
 
-        # create route if missing
-        if ! oc get route "${APP_NAME}" >/dev/null 2>&1; then
-          echo "ℹ️ Creating route..."
-          oc expose svc "${APP_NAME}" || true
-        fi
+    - name: Get and show public route URL
+      id: get_route
+      run: |
+        ROUTE=$(oc get route springboot-k8s-demo -o jsonpath='{.spec.host}')
+        echo "🌍 Publiczny adres aplikacji: http://$ROUTE"
+        echo "::set-output name=app_url::http://$ROUTE"
 
-        # wait for route to appear
-        echo "⏳ Waiting for route to be available..."
-        for i in {1..20}; do
-          if oc get route "${APP_NAME}" >/dev/null 2>&1; then
-            break
-          fi
-          sleep 3
-          echo "⏳ attempt $i..."
-        done
-
-        if ! oc get route "${APP_NAME}" >/dev/null 2>&1; then
-          echo "❌ Route still not found after wait — aborting."
-          oc get all || true
-          exit 1
-        fi
-
-        APP_URL=$(oc get route "${APP_NAME}" -o jsonpath='http://{.spec.host}')
-        echo "✅ Application URL: ${APP_URL}"
+    # (Opcjonalnie) możesz zapisać URL do pliku lub dalej przekazać go do innych kroków
