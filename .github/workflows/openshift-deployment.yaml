@@ -48,14 +48,16 @@ jobs:
     - name: Login to OpenShift
       run: oc login ${{ secrets.OPENSHIFT_SERVER }} --token=${{ secrets.OPENSHIFT_TOKEN }} --insecure-skip-tls-verify=true
 
-    # 9. Deployment / aktualizacja aplikacji
+    # 9. Deployment lub aktualizacja
     - name: Deploy or Update App
       run: |
         oc project ${{ secrets.OPENSHIFT_PROJECT }}
 
-        if oc get dc springboot-k8s-demo >/dev/null 2>&1; then
+        if oc get deployment springboot-k8s-demo >/dev/null 2>&1 || oc get dc springboot-k8s-demo >/dev/null 2>&1; then
           echo "✅ Aplikacja już istnieje – aktualizacja obrazu..."
+          oc set image deployment/springboot-k8s-demo springboot-k8s-demo=${{ secrets.DOCKER_USERNAME }}/springboot-k8s-demo:latest || \
           oc set image dc/springboot-k8s-demo springboot-k8s-demo=${{ secrets.DOCKER_USERNAME }}/springboot-k8s-demo:latest
+          oc rollout restart deployment/springboot-k8s-demo || \
           oc rollout restart dc/springboot-k8s-demo
         else
           echo "🚀 Tworzenie aplikacji w OpenShift..."
@@ -63,3 +65,9 @@ jobs:
           oc expose deployment springboot-k8s-demo --port=8080
           oc expose svc/springboot-k8s-demo
         fi
+
+    # 10. Pobranie URL aplikacji
+    - name: Get Application URL
+      run: |
+        echo "🌍 Publiczny adres aplikacji:"
+        oc get route springboot-k8s-demo -o jsonpath='http://{.spec.host}{"\n"}'
