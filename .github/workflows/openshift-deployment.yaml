@@ -66,8 +66,27 @@ jobs:
           oc expose svc/springboot-k8s-demo
         fi
 
-    # 10. Pobranie URL aplikacji
+    # 10. Pobranie URL aplikacji (z obsługą braku Route)
     - name: Get Application URL
       run: |
         echo "🌍 Publiczny adres aplikacji:"
-        oc get route springboot-k8s-demo -o jsonpath='http://{.spec.host}{"\n"}'
+
+        # Utwórz Route, jeśli nie istnieje
+        if ! oc get route springboot-k8s-demo >/dev/null 2>&1; then
+          echo "ℹ️  Route nie istnieje – tworzę nowy..."
+          oc expose svc/springboot-k8s-demo || true
+          sleep 5
+        fi
+
+        # Poczekaj aż Route będzie dostępny
+        for i in {1..10}; do
+          if oc get route springboot-k8s-demo >/dev/null 2>&1; then
+            break
+          fi
+          echo "⏳ Oczekiwanie na utworzenie Route..."
+          sleep 3
+        done
+
+        # Pobierz i pokaż adres
+        APP_URL=$(oc get route springboot-k8s-demo -o jsonpath='http://{.spec.host}')
+        echo "$APP_URL"
